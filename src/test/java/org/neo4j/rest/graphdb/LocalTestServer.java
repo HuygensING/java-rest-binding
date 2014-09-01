@@ -21,9 +21,9 @@ package org.neo4j.rest.graphdb;
 
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.kernel.logging.DevNullLoggingService;
 import org.neo4j.server.CommunityNeoServer;
 import org.neo4j.server.configuration.PropertyFileConfigurator;
-import org.neo4j.server.database.CommunityDatabase;
 import org.neo4j.server.database.Database;
 import org.neo4j.server.database.WrappedDatabase;
 import org.neo4j.server.modules.RESTApiModule;
@@ -71,7 +71,7 @@ public class LocalTestServer {
         if (neoServer!=null) throw new IllegalStateException("Server already running");
         URL url = getClass().getResource("/" + propertiesFile);
         if (url==null) throw new IllegalArgumentException("Could not resolve properties file "+propertiesFile);
-        final Jetty9WebServer jettyWebServer = new Jetty9WebServer(); /* {
+        final Jetty9WebServer jettyWebServer = new Jetty9WebServer(DevNullLoggingService.DEV_NULL); /* {
             @Override
             protected void startJetty() {
                 final Server jettyServer = getJetty();
@@ -108,20 +108,20 @@ public class LocalTestServer {
 
             public void destroy() { }
         },"/*");
-        neoServer = new CommunityNeoServer(new PropertyFileConfigurator(new File(url.getPath()))) {
+        neoServer = new CommunityNeoServer(new PropertyFileConfigurator(new File(url.getPath())),DevNullLoggingService.DEV_NULL) {
             @Override
             protected int getWebServerPort() {
                 return port;
             }
 
-            @Override
+
             protected Database createDatabase() {
                 return new WrappedDatabase(graphDatabase);
             }
 
             @Override
             protected PreFlightTasks createPreflightTasks() {
-                return new PreFlightTasks();
+                return new PreFlightTasks(DevNullLoggingService.DEV_NULL);
             }
 
             @Override
@@ -131,7 +131,7 @@ public class LocalTestServer {
 
             @Override
             protected Iterable<ServerModule> createServerModules() {
-                return asList(new RESTApiModule(webServer,database,configurator.configuration()),new ThirdPartyJAXRSModule(webServer,configurator,this));
+                return asList(new RESTApiModule(webServer,database,configurator.configuration(),DevNullLoggingService.DEV_NULL),new ThirdPartyJAXRSModule(webServer,configurator,DevNullLoggingService.DEV_NULL,this));
             }
         };
         neoServer.start();

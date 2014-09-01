@@ -57,6 +57,31 @@ public class RestNode extends RestEntity implements Node {
     	 return this.restApi.createRelationship(this, toNode, type, null);
     }
 
+    @Override
+    public Iterable<RelationshipType> getRelationshipTypes() {
+        return null;
+    }
+
+    @Override
+    public int getDegree() {
+        return 0;
+    }
+
+    @Override
+    public int getDegree(RelationshipType type) {
+        return 0;
+    }
+
+    @Override
+    public int getDegree(Direction direction) {
+        return 0;
+    }
+
+    @Override
+    public int getDegree(RelationshipType type, Direction direction) {
+        return 0;
+    }
+
     public Iterable<Relationship> getRelationships() {
         return restApi.getRelationships(this, "relationships/all");
     }

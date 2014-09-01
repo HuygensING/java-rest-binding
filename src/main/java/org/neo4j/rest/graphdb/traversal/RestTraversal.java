@@ -205,4 +205,9 @@ public class RestTraversal implements RestTraversalDescription {
     public Traverser traverse(Node... startNode) {
         throw new UnsupportedOperationException();
     }
+
+    @Override
+    public Traverser traverse(Iterable<Node> iterableStartNodes) {
+        throw new UnsupportedOperationException();
+    }
 }
