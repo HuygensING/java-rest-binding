@@ -19,123 +19,126 @@
  */
 package org.neo4j.rest.graphdb;
 
+import static org.junit.Assert.assertEquals;
+
+import java.util.Iterator;
 
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.neo4j.graphdb.*;
+import org.neo4j.graphdb.Direction;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.Transaction;
 import org.neo4j.helpers.collection.IteratorUtil;
-import org.neo4j.rest.graphdb.entity.RestNode;
 import org.neo4j.rest.graphdb.util.Config;
 import org.neo4j.tooling.GlobalGraphOperations;
 
-import java.net.URISyntaxException;
-import java.util.Iterator;
-
-import static org.junit.Assert.assertEquals;
-
 public class RestTestBase {
 
-    private GraphDatabaseService restGraphDb;
-    private static final String HOSTNAME = "localhost";
-    private static final int PORT = 7473;
-    private static LocalTestServer neoServer;
-    public static final String SERVER_ROOT = "http://" + HOSTNAME + ":" + PORT;
-    protected static final String SERVER_ROOT_URI = SERVER_ROOT + "/db/data/";
-    private static final String SERVER_CLEANDB_URI = SERVER_ROOT + "/cleandb/secret-key";
-    private static final String CONFIG = RestTestBase.class.getResource("/neo4j-server.properties").getFile();
-    private long referenceNodeId;
-    private Node referenceNode;
+  private GraphDatabaseService restGraphDb;
+  private static final String HOSTNAME = "localhost";
+  private static final int PORT = 4773;
+  private static LocalTestServer neoServer;
+  public static final String SERVER_ROOT = "http://" + HOSTNAME + ":" + PORT;
+  protected static final String SERVER_ROOT_URI = SERVER_ROOT + "/db/data/";
+  private static final String SERVER_CLEANDB_URI = SERVER_ROOT + "/cleandb/secret-key";
+  private static final String CONFIG = RestTestBase.class.getResource("/neo4j-server.properties").getFile();
+  private long referenceNodeId;
+  private Node referenceNode;
 
-    static {
-        initServer();
+  static {
+    initServer();
+  }
+
+  protected static void initServer() {
+    if (neoServer != null) {
+      neoServer.stop();
     }
+    neoServer = new LocalTestServer(HOSTNAME, PORT).withPropertiesFile("neo4j-server.properties");
+  }
 
-    protected static void initServer() {
-        if (neoServer!=null) {
-            neoServer.stop();
-        }
-        neoServer = new LocalTestServer(HOSTNAME,PORT).withPropertiesFile("neo4j-server.properties");
+  @BeforeClass
+  public static void startDb() throws Exception {
+    neoServer.start();
+    tryConnect();
+  }
+
+  private static void tryConnect() throws InterruptedException {
+    int retryCount = 3;
+    for (int i = 0; i < retryCount; i++) {
+      try {
+        RequestResult result = new ExecutingRestRequest(SERVER_ROOT_URI).get("");
+        assertEquals(200, result.getStatus());
+        System.err.println("Successful HTTP connection to " + SERVER_ROOT_URI);
+        return;
+      } catch (Exception e) {
+        System.err.println("Error retrieving ROOT URI " + e.getMessage());
+        Thread.sleep(500);
+      }
     }
+  }
 
-    @BeforeClass
-    public static void startDb() throws Exception {
-        neoServer.start();
-        tryConnect();
+  @Before
+  public void setUp() throws Exception {
+    System.setProperty(Config.CONFIG_BATCH_TRANSACTION, "false");
+    neoServer.cleanDb();
+    restGraphDb = new RestGraphDatabase(SERVER_ROOT_URI);
+
+    GraphDatabaseService db = getGraphDatabase();
+    try (Transaction tx = db.beginTx()) {
+      Node node = db.createNode();
+      this.referenceNodeId = node.getId();
+      tx.success();
     }
+    this.referenceNode = restGraphDb.getNodeById(referenceNodeId);
 
-    private static void tryConnect() throws InterruptedException {
-        int retryCount = 3;
-        for (int i = 0; i < retryCount; i++) {
-            try {
-                RequestResult result = new ExecutingRestRequest(SERVER_ROOT_URI).get("");
-                assertEquals(200, result.getStatus());
-                System.err.println("Successful HTTP connection to "+SERVER_ROOT_URI);
-                return;
-            } catch (Exception e) {
-                System.err.println("Error retrieving ROOT URI " + e.getMessage());
-                Thread.sleep(500);
-            }
-        }
-    }
+  }
 
-    @Before
-    public void setUp() throws Exception {
-        System.setProperty(Config.CONFIG_BATCH_TRANSACTION,"false");
-        neoServer.cleanDb();
-        restGraphDb = new RestGraphDatabase(SERVER_ROOT_URI);
+  @After
+  public void tearDown() throws Exception {
+    restGraphDb.shutdown();
+  }
 
-        GraphDatabaseService db = getGraphDatabase();
-        try (Transaction tx = db.beginTx()) {
-            Node node = db.createNode();
-            this.referenceNodeId = node.getId();
-            tx.success();
-        }
-        this.referenceNode = restGraphDb.getNodeById(referenceNodeId);
+  @AfterClass
+  public static void shutdownDb() {
+    neoServer.stop();
 
-    }
+  }
 
-    @After
-    public void tearDown() throws Exception {
-        restGraphDb.shutdown();
-    }
+  protected Relationship relationship() {
+    Iterator<Relationship> it = node().getRelationships(Direction.OUTGOING).iterator();
+    if (it.hasNext()) return it.next();
+    return node().createRelationshipTo(restGraphDb.createNode(), Type.TEST);
+  }
 
-    @AfterClass
-    public static void shutdownDb() {
-        neoServer.stop();
+  protected Node node() {
+    return referenceNode;
+  }
 
-    }
+  protected long nodeId() {
+    return referenceNodeId;
+  }
 
-    protected Relationship relationship() {
-        Iterator<Relationship> it = node().getRelationships(Direction.OUTGOING).iterator();
-        if (it.hasNext()) return it.next();
-        return node().createRelationshipTo(restGraphDb.createNode(), Type.TEST);
-    }
+  protected GraphDatabaseService getGraphDatabase() {
+    return neoServer.getGraphDatabase();
+  }
 
-    protected Node node() {
-        return referenceNode;
-    }
-    protected long nodeId() {
-        return referenceNodeId;
-    }
+  protected GraphDatabaseService getRestGraphDb() {
+    return restGraphDb;
+  }
 
-    protected GraphDatabaseService getGraphDatabase() {
-    	return neoServer.getGraphDatabase();
-    }
+  protected int countExistingNodes() {
+    return IteratorUtil.count(GlobalGraphOperations.at(getGraphDatabase()).getAllNodes());
+  }
 
-	protected GraphDatabaseService getRestGraphDb() {
-		return restGraphDb;
-	}
+  protected Node loadRealNode(Node node) {
+    return getGraphDatabase().getNodeById(node.getId());
+  }
 
-    protected int countExistingNodes() {
-        return IteratorUtil.count(GlobalGraphOperations.at(getGraphDatabase()).getAllNodes());
-    }
-
-    protected Node loadRealNode(Node node) {
-        return getGraphDatabase().getNodeById(node.getId());
-    }
-    public String getUserAgent() {
-        return neoServer.getUserAgent();
-    }
+  public String getUserAgent() {
+    return neoServer.getUserAgent();
+  }
 }
